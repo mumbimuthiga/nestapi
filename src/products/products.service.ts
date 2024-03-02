@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -11,18 +11,25 @@ export class ProductsService {
     const { categories, ...productData } = createProductDto;
     console.log('Product DTO', createProductDto);
     try {
-      const newProduct = await this.prismaService.product.create({
-        data: {
-          ...productData,
-          categories: {
-            create: categories.map((category) => ({
-              name: category.name,
-            })),
+      // find exsting product
+      const existingProduct = await this.findByProductName(productData.name);
+      console.log('Existing', existingProduct);
+
+      if (!existingProduct) {
+        const newProduct = await this.prismaService.product.create({
+          data: {
+            ...productData,
+            categories: {
+              create: categories.map((category) => ({
+                name: category.name,
+              })),
+            },
           },
-        },
-      });
-      console.log('New product', newProduct);
-      return newProduct;
+        });
+        console.log('New product', newProduct);
+        return newProduct;
+      }
+      throw new ForbiddenException('Product already exists');
     } catch (error) {
       console.log('Error', error);
       throw error;
@@ -31,7 +38,11 @@ export class ProductsService {
 
   async findAll() {
     try {
-      const products = await this.prismaService.product.findMany({});
+      const products = await this.prismaService.product.findMany({
+        include: {
+          categories: true,
+        },
+      });
       return products;
     } catch (error) {
       console.log('Error', error);
@@ -44,6 +55,19 @@ export class ProductsService {
       const product = await this.prismaService.product.findUnique({
         where: {
           id,
+        },
+      });
+      return product;
+    } catch (error) {
+      console.log('Error', error);
+      throw error;
+    }
+  }
+  async findByProductName(name: string) {
+    try {
+      const product = await this.prismaService.product.findFirst({
+        where: {
+          name,
         },
       });
       return product;
@@ -76,9 +100,15 @@ export class ProductsService {
 
   async remove(id: string) {
     try {
-      const deletedProduct = await this.prismaService.product.delete({
-        where: { id },
-      });
+      const deletedProduct = await this.prismaService.$transaction([
+        this.prismaService.category.deleteMany({
+          where: { productId: id },
+        }),
+        this.prismaService.product.delete({
+          where: { id },
+        }),
+      ]);
+      console.log('Deleted product', deletedProduct);
       return deletedProduct;
     } catch (error) {
       console.log('Error', error);

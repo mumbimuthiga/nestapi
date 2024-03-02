@@ -38,12 +38,12 @@ model Bookmark {
 
 model Product {
   id          String     @id @default(uuid())
-  name        String     @db.VarChar(100)
+  name        String     @unique @db.VarChar(100)
   description String     @db.VarChar(2000)
   price       Int
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-  categories    Category[]
+  categories  Category[]
 
   @@map("products")
 }
